@@ -1,0 +1,199 @@
+* 管道与串行宏
+** Macro（宏）
+*** log
+    #+begin_src elixir
+    def plus(a, b) do
+      result = a + b
+
+      # 打印
+      IO.inspect("WARNING: #{result}")
+      # 并返回 result 作为返回值
+      result
+    end
+    #+end_src
+*** 创造自己的语法
+    #+begin_src elixir
+    def_withlog plus(a, b) do
+      a + b
+    end
+    #+end_src
+*** 介入编译器
+    如果能生成函数就好了
+    #+begin_src elixir
+    def {这里填函数名} do
+      result = {这里是函数执行体}
+
+      IO.inspect("WARNING: #{result}")
+      result
+    end
+    #+end_src
+
+    有请 =macro= 登场
+    #+begin_src elixir
+    defmacro deflog(args, do: block) do
+      quote do
+        def unquote(args) do
+          result = unquote(block)
+
+          IO.inspect("WARNING: #{result}")
+          result
+        end
+      end
+    end
+    #+end_src
+
+*** [[file+emacs:def_withlog.org][def_withlog]] 完整示例
+
+*** macro 与 yield 与 class_eval
+**** 执行时期
+**** 结构化修改 AST
+
+** 管道
+*** 管道也是宏
+    #+begin_src elixir
+    defmacro left |> right do
+      [{h, _} | t] = Macro.unpipe({:|>, [], [left, right]})
+
+      fun = fn {x, pos}, acc ->
+        Macro.pipe(acc, x, pos)
+      end
+
+      :lists.foldl(fun, h, t)
+    end
+    #+end_src
+** 串行宏
+*** 思路
+    不过 Elixir 不允许再定义新的中缀操作符，所以我们无法定义一个像管道符那样的东西了
+
+    我的函数看起来像这样
+    #+begin_src elixir
+    thread_first do
+      "hello world"
+      String.split()
+      Stream.map(&String.capitalize/1)
+      Enum.join()
+    end
+    #+end_src
+
+    先看看 macro 拿到的 block 长什么样
+    #+begin_src elixir
+    defmodule ThreadFirstMacros do
+      defmacro thread_first(do: block) do
+        IO.inspect block
+      end
+    end
+
+    defmodule Test do
+      import ThreadFirstMacros
+
+      def run do
+        thread_first do
+          String.split("hello world")
+        end
+      end
+
+      def run! do
+        thread_first do
+          "hello world"
+          String.split()
+        end
+      end
+    end
+
+    Test.run
+    Test.run!
+    #+end_src
+
+    #+RESULTS:
+    #+begin_example
+    #+end_example
+
+    整理一下
+    #+begin_src elixir
+    {
+      {:., # 操作符
+       [line: 12], # 一些元信息
+       [ # 操作符的参数
+         {:__aliases__, [counter: -576460752303422974, line: 12], [:String]},
+         :split
+       ]
+      },
+      [line: 12],
+      ["hello world"]
+    }
+
+    {
+      :__block__,
+      [line: 76],
+      [
+        "hello world",
+        {
+          {:.,
+           [line: 19],
+           [
+             {:__aliases__, [counter: -576460752303422974, line: 19], [:String]},
+             :split
+           ]
+          },
+          [line: 19],
+          [] # 如果能把参数放在这里就好了
+        }
+      ]
+    }
+    #+end_src
+
+    不用自己实现， =Macro.pipe/3= 就是做这个的
+
+    #+begin_src elixir
+    Macro.pipe(
+      "hello world",
+      {
+        {:.,
+         [line: 19],
+         [
+           {:__aliases__, [counter: -576460752303422974, line: 19], [:String]},
+           :split
+         ]
+        },
+        [line: 19],
+        [] # 如果能把参数放在这里就好了
+      },
+      0
+    )
+    #+end_src
+
+    #+RESULTS:
+
+*** [[./thread_first.org][thread_first]] 完整示例
+
+** 加餐
+   打印管道中间状态
+   Elixir 不允许再定义新的中缀操作符，不过老的可以
+   https://github.com/alco/pipespect
+   #+begin_src elixir
+   import Enum
+
+   [1,2,3] |> reverse |> map(& &1*&1) |> join(" . ")
+   # output: none
+
+   use Pipespect
+   [1,2,3] |> reverse |> map(& &1*&1) |> join(" . ")
+   # output:
+   #   [3, 2, 1]
+   #   [9, 4, 1]
+   #   "9 . 4 . 1"
+   #+end_src
+
+* 原作者 ianrumford
+  http://ianrumford.github.io/elixir/pipe/clojure/thread-first/macro/2016/07/24/writing-your-own-elixir-pipe-operator.html
+** 我的 fork（更新了一下语法格式）
+   https://github.com/BlindingDark/elixir-thread-first
+
+-----
+
+#+begin_src elixir
+Macro.unpipe({:|>, [], [{}, {}]})
+#+end_src
+
+#+RESULTS:
+: [{{}, 0}, {{}, 0}]

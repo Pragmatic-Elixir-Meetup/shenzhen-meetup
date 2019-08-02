@@ -1,0 +1,24 @@
+#+begin_src elixir
+defmodule MacroExample do
+  defmacro def_withlog(args, do: block) do
+    quote do
+      def unquote(args) do
+        result = unquote(block)
+
+        IO.inspect("WARNING: #{result}")
+        result
+      end
+    end
+  end
+end
+
+defmodule Test do
+  import MacroExample
+
+  def_withlog plus(a, b) do
+    a + b
+  end
+end
+
+Test.plus(1, 2)
+#+end_src
