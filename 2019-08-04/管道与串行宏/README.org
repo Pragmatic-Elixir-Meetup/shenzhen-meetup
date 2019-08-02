@@ -42,7 +42,7 @@
     end
     #+end_src
 
-*** [[file+emacs:def_withlog.org][def_withlog]] 完整示例
+*** [[./def_withlog.org][def_withlog]] 完整示例
 
 *** macro 与 yield 与 class_eval
 **** 执行时期
